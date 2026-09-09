@@ -1,0 +1,93 @@
+
+#Last Common Ancestor (LCA) analysis was performed to assign a conservative taxonomic label to each protein sequence 
+#based on high‑scoring DIAMOND hits. 
+#The LCA approach integrates all matches within the top percentage of the best bit‑score, 
+#allowing robust taxonomic inference while minimizing misclassification due to spurious hits.
+
+# 1. Download and prepare the NCBI nr database
+
+# Download the nr FASTA file
+wget ftp://ftp.ncbi.nlm.nih.gov/blast/db/FASTA/nr.gz
+
+# Decompress
+gzip -d nr.gz
+
+# Load DIAMOND (modify according to your environment)
+# module load DIAMOND
+
+# Build DIAMOND database with taxonomy support
+diamond makedb \
+    --in nr \
+    -d nr.dmnd \
+    --taxonmap prot.accession2taxid.gz \
+    --taxonnodes nodes.dmp \
+    --taxonnames names.dmp
+
+
+# 2. DIAMOND blastp search
+
+
+# Load DIAMOND and BLAST+ if needed
+# module load DIAMOND
+# module load BLAST+
+
+# Copy database to temporary directory (optional)
+cp /path/to/nr.dmnd "$TMPDIR"
+
+# Run DIAMOND blastp
+diamond blastp \
+    -q input_proteins.faa \
+    --db "$TMPDIR/nr.dmnd" \
+    --evalue 0.00001 \
+    --outfmt 102 \
+    --top 10 \
+    -p 16 \
+    -t "$TMPDIR" \
+    -o output.lca.out \
+    --sallseqid
+
+
+# 3. TaxonKit: extract taxonomy from LCA output
+
+
+# Input file containing taxonomic IDs (LCA output)
+INPUT="output.lca.out"
+
+# Temporary and output files
+TAXIDS="taxids.txt"
+LINEAGE="lineage.txt"
+TAXONOMY="taxonomy.tsv"
+MERGED="merged_with_taxonomy.tsv"
+FILTERED="filtered.tsv"
+
+# Extract taxids from column 2
+cut -f2 "$INPUT" > "$TAXIDS"
+
+# Retrieve full lineage
+taxonkit lineage "$TAXIDS" > "$LINEAGE"
+
+# Reformat lineage into a tab-separated taxonomy table
+taxonkit lineage "$TAXIDS" \
+    | taxonkit reformat -f "{k}\t{p}\t{c}\t{o}\t{f}\t{g}\t{s}" \
+    > "$TAXONOMY"
+
+# Combine original file with taxonomy annotations
+paste "$INPUT" "$TAXONOMY" > "$MERGED"
+
+# Remove entries with taxid = 0 (unclassified)
+awk '$2 != 0' "$MERGED" > "$FILTERED"
+
+# Optional: lineage with taxid included
+# taxonkit lineage -t "$INPUT"
+
+
+# 4. Useful commands to explore taxonomy
+
+# Extract Bacteria + Archaea
+cut -f2 "$FILTERED" | taxonkit lineage | grep -E "Bacteria|Archaea" > bac_arc_taxids.txt
+
+# Extract Eukaryota
+cut -f2 "$FILTERED" | taxonkit lineage | grep -E "Eukaryota" > euk_taxids.txt
+
+# Extract Viruses
+cut -f2 "$FILTERED" | taxonkit lineage | grep -E "Virus" > virus_taxids.txt
