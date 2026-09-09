@@ -3,29 +3,18 @@
 ## Repository structure
 metagenomic-protocols/  
 │
-├── trimming/  
-│   └── trimmomatic.sh  
+├── trimming  
 │  
-├── QC/  
-│   ├── fastqc.sh  
-│   └── multiqc.sh  
+├── QC
 │  
-├── assembly/  
-│   ├── megahit.sh  
-│   └── spades.sh  
-├── Gene_prediction/  
-│   ├── Prodigal.sh  
-│   └── PROKKA.sh  
+├── assembly  
+│
+├── Gene_prediction    
 │  
-├── binning/  
-│   ├── metabat.sh  
+├── binning     
 │     
+├── annotation    
 │  
-├── annotation/  
-│   ├── eggnog.sh  
-│   └── kofamscan.sh  
-│  
-├── Data_matrix  
-│   └── build_matrix.sh  
+├── Data_matrix    
 │  
 └── README.md  
