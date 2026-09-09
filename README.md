@@ -2,14 +2,13 @@
 
 ## Repository structure
 metagenomic-protocols/  
-│  
-│  
+│    
 ├── trimming    
 │    
 ├── QC    
 │  
 ├── assembly  
-│
+│  
 ├── Gene_prediction    
 │  
 ├── binning     
