@@ -3,18 +3,10 @@
 ## Repository structure
 metagenomic-protocols/  
 │    
-├── trimming    
-│    
-├── QC    
-│  
-├── assembly  
-│  
-├── Gene_prediction    
+├── MetaG pipeline (QC, trimming, assembly, gene prediction, annotation)    
 │  
 ├── binning     
-│     
-├── annotation    
-│  
+│       
 ├── Data_matrix    
 │  
 └── README.md  
