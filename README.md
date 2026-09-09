@@ -1,7 +1,7 @@
 # Metagenomic_protocols
 
 ## Repository structure
-metagenomic-protocols/
+metagenomic-protocols/  
 │
 ├── trimming/
 │   └── trimmomatic.sh
