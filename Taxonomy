@@ -1,0 +1,39 @@
+#Protocol for defining the taxonomic profile of microbial communities from metagenomic data using the SingleM tool
+#For additional information on installation, please refer to the official documentation: https://wwood.github.io/singlem/Installation
+###############################################
+# 1. Download SingleM metadata (metapackage)
+###############################################
+
+# Activate SingleM environment (modify according to your setup)
+ module load conda
+ conda activate /path/to/singlem_env
+
+# Attempt automatic metadata download
+singlem data
+
+# If the command fails, download the metapackage manually from:
+# https://zenodo.org/records/15232972
+
+# Example manual installation:
+cd /path/to/singlem_env
+mkdir S5.4.0.GTDB_r226.metapackage
+
+# Extract the downloaded archive
+tar -xvzf S5.4.0.GTDB_r226.metapackage_20250331.smpkg.zb.tar.gz \
+    -C S5.4.0.GTDB_r226.metapackage
+
+# When running SingleM, specify the metapackage path using --metapackage
+###############################################
+# 2. Run SingleM on paired-end reads
+###############################################
+
+# Activate environment
+ module load conda
+ conda activate /path/to/singlem_env
+
+# Basic command for taxonomic profiling
+singlem pipe \
+    -1 <input_R1.fastq.gz> \
+    -2 <input_R2.fastq.gz> \
+    -p <output.profile.tsv> \
+    --metapackage /path/to/S5.4.0.GTDB_r226.metapackage/<metapackage_file>.smpkg.zb
