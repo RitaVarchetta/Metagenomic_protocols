@@ -1,0 +1,139 @@
+#Binning_protocols
+#tools used: BWA/0.7.19-GCCcore-14.2.0, SAMtools/1.23.1-GCC-14.3.0, MetaBAT/2.18-GCC-13.3.0, CheckM2/1.1.0-foss-2024a, GTDBTk-2.6.1
+#Starting from contigs >2000 bp (it’s also possible to choose longer lengths, such as 2500 bp or 3000 bp)
+
+#How to obtain the depth files:
+
+#(this is the custom script for my samples, but with a few adjustments it can be adapted to samples with different names)
+
+#Loading packages
+
+
+module load BWA/0.7.19-GCCcore-14.2.0
+module load SAMtools/1.23.1-GCC-14.3.0
+module load MetaBAT/2.18-GCC-13.3.0
+
+#Defining variables
+
+assembly_dir="/path/to/your/>2000bp/contigs/"
+raw="/path/to/your/trimmed/raw/data/"
+output="/output/bam_files_IBIZA/"
+depth="/output2/depth_files/"
+
+
+#**Create output folders** (if they already exist, the command will be ignored)
+
+mkdir -p "$output"
+mkdir -p "$depth"
+
+
+#Create a loop to process all samples
+
+for asm in "$assembly_dir"/*_assembly_2kb.fasta; do
+fname=$(basename "$asm")
+
+
+# **Common prefix for sample names** (make sure that the contig filenames share a common part with their corresponding raw data)
+
+PREFIX=$(echo "$fname" | sed 's/_assembly_2kb\.fasta//')
+
+
+# FASTQ_trimmed_file
+
+FWD="${raw}/${PREFIX}-L001_forward_paired.fq.gz"
+REV="${raw}/${PREFIX}-L001_reverse_paired.fq.gz"
+
+
+#Check if the file exists
+
+if [[ ! -f "$FWD" || ! -f "$REV" ]]; then
+echo "Missing FASTQ for $PREFIX, skipping"
+continue
+fi
+
+
+#Define variable for the BAM file
+
+BAM="${output}/${PREFIX}.bam"
+
+
+#IINDEX FOR EACH ASSEMBLY
+
+
+bwa index "$asm"
+
+
+#MAPPING
+
+bwa mem -t 16 "$asm" "$FWD" "$REV" \
+| samtools sort -@ 8 -o "$BAM"
+samtools index "$BAM"
+
+
+#DEPTH for samples
+
+jgi_summarize_bam_contig_depths \
+--outputDepth "${depth}/${PREFIX}_depth.txt" \
+--pairedContigs "${depth}/${PREFIX}_paired.txt" \
+"$BAM"
+done
+
+
+####**Once the depth files have been obtained, proceed with binning** (I performed this analysis in two steps: first I generated the depth files, then I ran the binning, but if you prefer you can merge the two scripts)
+
+#Loading packages in LISC
+
+module load MetaBAT/2.18-GCC-13.3.0
+
+input="/path/to/your/>2000bp/contigs/"
+output="/output/bin/"
+dep="/path/to/depth_files/"
+mkdir -p "$output"
+
+
+# Create a loop to process all samples
+
+for assembly in $input/*_assembly_2kb.fasta; do
+sample=$(basename "$assembly" _assembly_2kb.fasta)
+echo ">>> Processing sample: $sample"
+
+
+#Run MetaBAT
+
+echo "Running MetaBAT for $sample"
+metabat \
+-i "$assembly" \
+-a "$dep/${sample}_depth.txt" \
+-o "$output/${sample}-bin" \
+-t 40 \
+--minCVSum 0 \
+--saveCls \
+-d -v \
+--minCV 0.1 \
+-m 2000
+echo "Finished MetaBAT for $sample"
+done
+
+
+# Once the binning step is completed, you need to evaluate the quality of the bins
+
+
+module load CheckM2/1.1.0-foss-2024a
+input="/path/to/your/bin/"
+checkm2 predict --threads 30 --input "$input/" --output-directory "$input/check/" -x fa
+
+
+# This will produce a quality report. In my case, I extracted the filenames with completeness <50 and contamination >10 and removed them from the folder.
+
+awk -F'\t' 'NR>1 && $2 < 50 {print $1}' quality_report > delete
+awk -F'\t' 'NR>1 && $3 > 10 {print $1}' quality report > delete2
+xargs rm < delete
+xargs rm < delete2
+
+# After filtering the bins, you can proceed with the taxonomic assignment.
+module load Conda; conda activate GTDBTk-2.6.1
+gtdbtk classify_wf \
+--genome_dir /path/to/your/filtered/bin/ \
+--out_dir /output/taxonomy_bin/ \
+--extension fa \
+--cpus 8
