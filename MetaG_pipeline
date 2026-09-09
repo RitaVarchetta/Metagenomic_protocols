@@ -1,0 +1,139 @@
+#step principali nell'analisi dei dati metagenomici
+#tools used: FastQC/0.12.1-GCCcore-14.3.0-Java-2, Conda; conda activate MultiQC-1.33, Trimmomatic/0.40-Java-17, 
+#Quality check of raw reads
+
+module load FastQC/0.12.1-GCCcore-14.3.0-Java-21
+module load Conda; conda activate MultiQC-1.33
+# Directory containing raw paired-end reads
+INPUT="/path/to/raw_reads/"
+
+# Directory where FastQC results will be stored
+OUTPUT="/path/to/fastqc_output/"
+mkdir -p "$OUTPUT"
+
+# Loop over all raw forward reads (adjust pattern if needed)
+for r1 in "$INPUT"/*_R1.fastq.gz; do
+
+    # Extract sample name (generic pattern)
+    SAMPLE=$(basename "$r1" | sed 's/_R1.fastq.gz//')
+
+    # Build reverse read filename
+    r2="${INPUT}/${SAMPLE}_R2.fastq.gz"
+
+    # Skip if reverse read is missing
+    if [[ ! -e "$r2" ]]; then
+        echo "WARNING: Missing R2 for sample $SAMPLE — skipping"
+        continue
+    fi
+
+    echo "Processing $SAMPLE"
+
+    # Run FastQC on both raw reads
+    fastqc "$r1" "$r2" -o "$OUTPUT"
+
+done
+
+# Run MultiQC on the FastQC output directory
+ multiqc "$OUTPUT" -o "$OUTPUT"
+
+#--------------------------------------------
+#Trimming step
+
+module load Trimmomatic/0.40-Java-17
+
+# Directory containing raw paired-end reads
+INPUT="/path/to/raw_reads/"
+
+# Adapter file (modify according to your sequencing provider)
+ADAPTERS="/path/to/adapters.fa"
+
+# Output directory for trimmed reads
+OUTPUT="/path/to/trimming_output/"
+mkdir -p "$OUTPUT"
+
+# Optional: numeric range filter for sample IDs
+MIN=1
+MAX=999
+
+# Loop over all forward reads (adjust pattern if needed)
+for R1 in "$INPUT"/*_R1.fastq.gz; do
+
+    # Build reverse read filename
+    R2="${R1/_R1/_R2}"
+
+    # Extract sample name (generic pattern)
+    SAMPLE=$(basename "$R1" | sed 's/_R1.fastq.gz//')
+
+    # Skip if reverse read is missing
+    if [[ ! -e "$R2" ]]; then
+        echo "WARNING: Missing R2 for sample $SAMPLE — skipping"
+        continue
+    fi
+
+    # Extract numeric ID from sample name (customize this part)
+    # Example: SAMPLE="Sample_147" → NUM=147
+    NUM=$(echo "$SAMPLE" | grep -o '[0-9]\+')
+
+    # Apply numeric range filter (optional)
+    if (( NUM < MIN || NUM > MAX )); then
+        echo "Skipping $SAMPLE (ID $NUM outside range)"
+        continue
+    fi
+
+    echo "Processing sample: $SAMPLE (ID=$NUM)"
+
+    # Run Trimmomatic
+    trimmomatic PE -threads 8 -phred33 \
+        "$R1" "$R2" \
+        "$OUTPUT/${SAMPLE}_forward_paired.fq.gz" \
+        "$OUTPUT/${SAMPLE}_forward_unpaired.fq.gz" \
+        "$OUTPUT/${SAMPLE}_reverse_paired.fq.gz" \
+        "$OUTPUT/${SAMPLE}_reverse_unpaired.fq.gz" \
+        ILLUMINACLIP:"$ADAPTERS":2:30:10 \
+        LEADING:3 TRAILING:3 MINLEN:36
+
+done
+
+#Prior to moving on to downstream analyses, the quality of the trimmed reads should be assessed using FastQC and MultiQC, 
+#following the same workflow applied to the raw reads.
+
+#-------------------------------------------------------------
+#ASSEMBLY
+
+# Directory containing trimmed reads
+INPUT="/path/to/trimmed_reads/"
+
+# Output directory for assemblies
+OUTPUT="/path/to/assembly_output/"
+mkdir -p "$OUTPUT"
+
+# Loop over all forward reads (adjust pattern if needed)
+for forward in "$INPUT"/*_R1.fq.gz; do
+
+    # Extract sample name
+    SAMPLE=$(basename "$forward" | sed 's/_R1.fq.gz//')
+
+    # Build reverse read filename
+    reverse="${INPUT}/${SAMPLE}_R2.fq.gz"
+
+    # Check that both reads exist
+    if [[ -f "$forward" && -f "$reverse" ]]; then
+        echo "Processing sample: $SAMPLE"
+        
+        megahit \
+            -1 "$forward" \
+            -2 "$reverse" \
+            -t 12 \
+            -o "$OUTPUT/$SAMPLE"
+
+    else
+        echo "WARNING: Missing paired file for sample $SAMPLE — skipping"
+    fi
+
+done
+
+#---------------------------------
+
+
+
+
