@@ -1,5 +1,5 @@
 #Binning_protocols
-#tools used: BWA/0.7.19-GCCcore-14.2.0, SAMtools/1.23.1-GCC-14.3.0, MetaBAT/2.18-GCC-13.3.0, CheckM2/1.1.0-foss-2024a, GTDBTk-2.6.1
+#tools used: BWA/0.7.19-GCCcore-14.2.0, SAMtools/1.23.1-GCC-14.3.0, MetaBAT/2.18-GCC-13.3.0, CheckM2/1.1.0-foss-2024a, GTDBTk-2.6.1, dRep/3.6.2-foss-2022a, prodigal/2.6.3-GCCcore-14.3.0, kofam_scan/1.3.0-gompi-2023b, CoverM-0.7.0
 #Starting from contigs >2000 bp (it’s also possible to choose longer lengths, such as 2500 bp or 3000 bp)
 
 #How to obtain the depth files:
@@ -137,3 +137,98 @@ gtdbtk classify_wf \
 --out_dir /output/taxonomy_bin/ \
 --extension fa \
 --cpus 8
+
+#Given the high number of reconstructed bins, I performed genome dereplication on the filtered bins
+
+module load dRep/3.6.2-foss-2022a
+
+dRep dereplicate drep/drep_out/ \
+    -g drep/*.fa \
+    -p 72 \
+    --ignoreGenomeQuality \
+    -pa 0.95 \
+    -sa 0.99 \
+    -cm larger
+
+#Gene prediction
+
+module load prodigal/2.6.3-GCCcore-14.3.0
+
+INPUT="/path/to/dereplicated_genomes/"
+OUTPUT="/path/to/output/prodigal_mag/"
+
+mkdir -p "$OUTPUT"
+
+for bin in "$INPUT"/*.fa; do
+SAMPLE=$(basename "$bin" .fa)
+echo "Processing $SAMPLE"
+
+prodigal -i "$bin" -a "$OUTPUT"/${SAMPLE}.faa -d "$OUTPUT"/${SAMPLE}.fna -p meta
+
+done
+
+#Gene annotation 
+module load kofam_scan/1.3.0-gompi-2023b
+
+PRODIGAL_OUT="/path/to/prodigal_mag/"
+OUT="/path/to/kofam_mag/"
+ko_list="/path/to/kegg_list"
+hal="/path/to/lista.hal"
+mkdir -p "$OUT"
+
+for sample in "$PRODIGAL_OUT"/*.faa; do
+
+    SAMPLE=$(basename "$sample" .faa)
+	
+exec_annotation \
+-o "$OUT/${SAMPLE}_kofam.tsv" \
+-f detail-tsv \
+-k "$ko_list" \
+--profile "$hal" \
+-E 0.00005 \
+"$sample"
+
+done
+
+#Mapping and quantification of MAGs
+
+module load Conda; conda activate CoverM-0.7.0
+
+MAG_DIR="/path/to/dereplicated_genomes/"
+RAW_DIR="/path/to/trimmed_raw_reads"
+OUT_DIR="/path/to/coverm_out/"
+mkdir -p "$OUT_DIR"
+
+# Loop over all R1 files 
+for r1 in ${RAW_DIR}/*XY*_R1.fq.gz; do
+    
+ # If no file exists, skip
+    [[ -e "$r1" ]] || continue
+
+   # Build the corresponding R2 filename
+    r2="${r1/_R1/_R2}"
+
+  # Check that R2 actually exists
+    if [[ ! -e "$r2" ]]; then
+       echo "WARNING: Missing R2 for $r1 — skipping sample"
+        continue
+    fi
+
+   # Extract the sample name
+    BASENAME=$(basename "$r1")
+    SAMPLE=${BASENAME%_R1.fq.gz}
+
+    echo "Processing $SAMPLE"
+
+    coverm genome \
+        --genome-fasta-directory "$MAG_DIR" \
+        -1 "$r1" \
+        -2 "$r2" \
+        --methods relative_abundance covered_fraction tpm rpkm \
+        -p bwa-mem \
+        -x fa \
+        --threads 16 \
+        --output-file "${OUT_DIR}/${SAMPLE}_abundance.tsv"
+
+done
+
