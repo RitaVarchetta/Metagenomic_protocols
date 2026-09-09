@@ -2,10 +2,11 @@
 
 ## Repository structure
 metagenomic-protocols/  
-│
-├── trimming  
 │  
-├── QC
+│  
+├── trimming    
+│    
+├── QC    
 │  
 ├── assembly  
 │
