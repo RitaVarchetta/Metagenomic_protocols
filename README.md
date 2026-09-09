@@ -9,6 +9,6 @@ metagenomic-protocols/
 │  
 ├── LCA   
 │  
-├── Data_matrix    
+├── Taxonomy  
 │  
 └── README.md  
