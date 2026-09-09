@@ -6,7 +6,9 @@ metagenomic-protocols/
 ├── MetaG pipeline (QC, trimming, assembly, gene prediction, annotation)    
 │  
 ├── binning     
-│       
+│  
+├── LCA   
+│  
 ├── Data_matrix    
 │  
 └── README.md  
